@@ -46,6 +46,7 @@ BREAK:
 %brk:
 .end_macro
 
+# an inverse-iter for
 .macro for_inv(%iter, %from, %to, %body)
     add     %iter, $zero, %from
 LOOP:
