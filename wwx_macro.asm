@@ -4,7 +4,8 @@
 #   All rights reserved.                                        #
 #################################################################
 
-# get address (%addr + %count << %pow + %bi); can be used to get addr of an element(with size pow(2, %pow)) in an array
+# get address (%addr + %count << %pow + %bi); 
+# can be used to get addr of an element(with size 0x1 << %pow) in an array
 .macro addr_buf(%targ, %addr, %count, %pow, %bi)
     mov     %targ, %count
     sll     %targ, %targ, %pow
@@ -50,19 +51,31 @@ BREAK:
 .macro for_inv(%iter, %from, %to, %body)
     add     %iter, $zero, %from
 LOOP:
-    ble     %iter, %to, BREAK_INV
+    ble     %iter, %to, BREAK
 	%body   ()
 	sub     %iter, %iter, 1
-    j       LOOP_INV
+    j       LOOP
 BREAK:
 .end_macro
 
-# move a reg/im to %targ
+# an inverse-iter "for" with custom label; can be used in nested loops
+.macro for_inv_l(%iter, %from, %to, %body, %lp, %brk)
+    add     %iter, $zero, %from
+%lp:
+    ble     %iter, %to, BREAK
+	%body   ()
+	sub     %iter, %iter, 1
+    j       LOOP
+%brk:
+.end_macro
+
+# move %src(reg/immed) to %targ; very universal
 .macro mov(%targ, %src)
     addu    %targ, $zero, %src
 .end_macro
 
-# get space at %gp. Bytes: %count * pow(2, %pow)
+# allocate space at %gp;
+% number of allocated bytes: %count * (0x1 << %pow)
 .macro  new(%targ, %count, %pow)
     mov     %targ, %count
     sll     %targ, %targ, %pow
@@ -70,7 +83,8 @@ BREAK:
     subu    %targ, $gp, %targ
 .end_macro
 
-# open file %name to %targ
+# open file %name and store the file identifier in %targ;
+# %name: .data, %targ: reg
 .macro open(%targ, %name, %flag)
     li      $v0, 13
     la      $a0, %name
@@ -79,27 +93,29 @@ BREAK:
     mov     %targ, $v0
 .end_macro
 
-# print the num in $a0
-.macro print_a0()               # printf the int in $a0 immediately
+# print the int in $a0; sometimes can be used to simplify steps
+.macro print_a0()
     li      $v0, 1
     syscall
 .end_macro
 
-# print the int in %src
-.macro print_int(%src)          # printf the int from %src, can be an immediate num
+# print the int in %src;
+# %src: reg/immed
+.macro print_int(%src)
     li      $v0, 1
     mov     $a0, %src
     syscall
 .end_macro
 
-# print the str in %name, .data
+# print the str in %name; %name: .data
 .macro print_str(%name)
     li      $v0, 4
     la      $a0, %name
     syscall
 .end_macro
 
-# read from %file, reg to %buffer
+# read from file identifier %file and store data to %buffer; 
+# %file: reg, %buffer: reg
 .macro read(%file, %buf, %size_i)
     li      $v0, 14
     mov     $a0, %file
@@ -108,49 +124,69 @@ BREAK:
     syscall
 .end_macro
 
-# read from buffer %addr[count]; %pow must be 2 because of "lw"
-.macro read_buf(%targ, %addr, %count, %pow) # read data from a buffer to %targ
-    mov     %targ, %count                # force: move count to reg
+# read one word from buffer;
+# address to be read: %addr + %count << %pow; 
+.macro read_buf(%targ, %addr, %count, %pow) 
+    mov     %targ, %count                
     sll     %targ, %targ, %pow
     addu    %targ, %targ, %addr
     lw      %targ, (%targ)
 .end_macro
 
-# read from buffer with a bias
+# read one word from buffer with a bias;
+# address to be read: %addr + %count << %pow + %bi; 
 .macro read_buf_b(%targ, %addr, %count, %pow, %bi)
-    mov     %targ, %count                # force: move count to reg
+    mov     %targ, %count
     sll     %targ, %targ, %pow
     addu    %targ, %targ, %addr
-	addu	%targ, %targ, %bi
+    addu	%targ, %targ, %bi
     lw      %targ, (%targ)
 .end_macro
 
-.macro scan_int(%targ)          # scanf an int to %targ
+# scanf an int to %targ
+.macro scan_int(%targ)
     li      $v0, 5
     syscall
     mov     %targ, $v0
 .end_macro
 
-.macro scan_v0()                # scanf to $v0 only
+# scanf an int to $v0 only
+.macro scan_v0()
     li      $v0, 5
     syscall
 .end_macro
 
+# write to file %file from %buffer with size %size_i;
+# %file: reg, file identifier, %size_i: reg/immed
 .macro write(%file, %buffer, %size_i)
     li      $v0, 15
     mov     $a0, %file
     mov     $a1, %buffer
-    li      $a2, %size_i
+    mov     $a2, %size_i
     syscall
 .end_macro
 
-.macro write_buf(%src, %addr, %count, %pow) # write data to a buffer from %src
-    mov     sub_temp, %count                # force: move count to reg
-    sll     sub_temp, sub_temp, %pow
-    addu    sub_temp, sub_temp, %addr
-    sw      %src, (sub_temp)
+# write one word to buffer; need a reg(%t) to temporarily store data
+# address to be written: %addr + %count << %pow
+.macro write_buf(%src, %t, %addr, %count, %pow) 
+    mov     %t, %count                
+    sll     %t, %t, %pow
+    addu    %t, %t, %addr
+    sw      %src, (%t)
 .end_macro
 
+# write one word to buffer with a bias; need a reg(%t) to temporarily store data
+# address to be written: %addr + %count << %pow + %bi
+.macro write_buf(%src, %t, %addr, %count, %pow, %bi) 
+    mov     %t, %count                
+    sll     %t, %t, %pow
+    addu    %t, %t, %addr
+    addu    %t, %t, %bi
+    sw      %src, (%t)
+.end_macro
+
+##############################################
+#             function related               #
 ##############################################
 
 .macro push_stk(%src)
