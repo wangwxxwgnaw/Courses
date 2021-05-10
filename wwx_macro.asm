@@ -4,7 +4,7 @@
 #   All rights reserved.                                        #
 #################################################################
 
-# get address of a buffer
+# get address (%addr + %count << %pow + %bi); can be used to get addr of an element(with size pow(2, %pow)) in an array
 .macro addr_buf(%targ, %addr, %count, %pow, %bi)
     mov     %targ, %count
     sll     %targ, %targ, %pow
@@ -24,7 +24,7 @@
     syscall
 .end_macro
 
-# loop for; iter from %from to %to
+# loop "for"; iter from %from to %to
 .macro for(%iter, %from, %to, %body)
     add     %iter, $zero, %from
 LOOP:
@@ -35,7 +35,7 @@ LOOP:
 BREAK:
 .end_macro
 
-# for with label
+# "for" with custom label; can be used in nested loops
 .macro for_l(%iter, %from, %to, %body, %lp, %brk)
     add     %iter, $zero, %from
 %lp:
@@ -46,7 +46,7 @@ BREAK:
 %brk:
 .end_macro
 
-# an inverse-iter for
+# an inverse-iter "for"
 .macro for_inv(%iter, %from, %to, %body)
     add     %iter, $zero, %from
 LOOP:
